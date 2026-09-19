@@ -11,12 +11,16 @@ const labels: Array<[keyof Profile, RegExp]> = [
   ["maritalStatus", /^marital status(?:\s*\(.*\))?$/i], ["partnerPreference", /^partner preference(?:\s*\(.*\))?$/i]
 ];
 
+// WhatsApp formatting markers (*bold*, _italic_, ~strike~, ```mono```) that wrap
+// text and would otherwise break label detection, e.g. "*1) Name:* Aston".
+const stripFormatting = (value: string) => value.replace(/[*~`]/g, "").trim();
+
 export function parseProfileText(raw: string): Profile {
   const profile = emptyProfile();
   profile.rawText = raw.trim();
   let current: keyof Profile | null = null;
   for (const sourceLine of raw.split(/\r?\n/)) {
-    const line = sourceLine.trim();
+    const line = stripFormatting(sourceLine);
     if (!line) continue;
     const cleaned = line.replace(/^\d+\s*[.)-]\s*/, "");
     const separator = cleaned.indexOf(":");
@@ -34,6 +38,11 @@ export function parseProfileText(raw: string): Profile {
     }
   }
   return profile;
+}
+
+// True when at least one known label (Name, DOB, etc.) was recognized and filled.
+export function hasRecognizedFields(profile: Profile): boolean {
+  return labels.some(([key]) => String(profile[key] || "").trim().length > 0);
 }
 
 export function ageFromDob(value: string) {

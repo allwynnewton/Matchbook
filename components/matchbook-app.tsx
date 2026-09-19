@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BriefcaseBusiness, Cake, Camera, Check, ChevronRight, Heart, Home, ImagePlus, Languages, LogOut, MapPin, MessageSquare, MoreVertical, Pencil, Plus, Search, ShieldCheck, Sparkles, Trash2, Upload, UserRound, UsersRound, X } from "lucide-react";
-import { ageFromDob, parseProfileText } from "@/lib/parser";
+import { ageFromDob, hasRecognizedFields, parseProfileText } from "@/lib/parser";
 import { profileStore } from "@/lib/profile-store";
 import { emptyProfile, Profile, ProfileStatus } from "@/lib/types";
 import { createSupabase, hasSupabase } from "@/lib/supabase";
@@ -89,7 +89,7 @@ export default function MatchbookApp() {
   }), [profiles, query, filter]);
 
   const beginAdd = () => { setRaw(""); setDraft(emptyProfile()); setParsed(false); setView("add"); };
-  const doParse = () => { if (!raw.trim()) return; setDraft(parseProfileText(raw)); setParsed(true); };
+  const doParse = () => { if (!raw.trim()) return; const result = parseProfileText(raw); if (!hasRecognizedFields(result)) { setNotice("Couldn't read this profile. Make sure each line has a label and value, e.g. \"Name: ...\"."); return; } setDraft(result); setParsed(true); };
   const saveDraft = async () => { if (!draft.name.trim()) { setNotice("Please enter a name before saving."); return; } setBusy(true); try { await profileStore.save(draft); await load(); setSelected(draft); setView("detail"); setParsed(false); setNotice("Profile saved"); } catch (e) { setNotice(e instanceof Error ? e.message : "Could not save profile"); } finally { setBusy(false); } };
   const updateSelected = async (next: Profile) => { setBusy(true); try { await profileStore.save(next); setSelected(next); setProfiles(old => old.map(p => p.id === next.id ? next : p)); setEditing(false); setNotice("Changes saved"); } catch (e) { setNotice(e instanceof Error ? e.message : "Could not save changes"); } finally { setBusy(false); } };
   const openProfile = (p: Profile) => { setSelected(p); setDraft(p); setEditing(false); setView("detail"); };
