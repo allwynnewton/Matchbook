@@ -45,12 +45,34 @@ export function hasRecognizedFields(profile: Profile): boolean {
   return labels.some(([key]) => String(profile[key] || "").trim().length > 0);
 }
 
+// Parses a date of birth. Indian DD-MM-YYYY is the primary format (also accepts
+// / and . separators and 2-digit years); ISO YYYY-MM-DD and textual dates like
+// "11th July 2000" are handled as fallbacks.
+export function parseDob(value: string): Date | null {
+  const cleaned = value.replace(/(\d)(st|nd|rd|th)/gi, "$1").trim();
+  const numeric = cleaned.match(/(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})/);
+  if (numeric) {
+    const [, a, b, c] = numeric;
+    let day: number, month: number, year: number;
+    if (a.length === 4) { year = +a; month = +b; day = +c; } // YYYY-MM-DD (ISO)
+    else { day = +a; month = +b; year = +c; }                // DD-MM-YYYY (Indian)
+    if (year < 100) year += year < 30 ? 2000 : 1900;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const d = new Date(year, month - 1, day);
+    // Reject impossible dates (e.g. 31-02-2000 rolling over to March).
+    if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+    return d;
+  }
+  const d = new Date(cleaned);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export function ageFromDob(value: string) {
-  const cleaned = value.replace(/(st|nd|rd|th)/gi, "");
-  const dob = new Date(cleaned);
-  if (Number.isNaN(dob.getTime())) return null;
+  const dob = parseDob(value);
+  if (!dob) return null;
   const now = new Date();
   let age = now.getFullYear() - dob.getFullYear();
   if (now < new Date(now.getFullYear(), dob.getMonth(), dob.getDate())) age--;
+  if (age < 0 || age > 120) return null;
   return age;
 }
