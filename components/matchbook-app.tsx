@@ -55,7 +55,6 @@ const sample = `1) Name: Jessica Audrey DSouza
 17) Partner preference (mandatory): Age within 31yrs, height:5'8" to 6'1", working in Bangalore or Gulf`;
 
 function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase() || "?"; }
-function maskPhone(value: string) { return value.replace(/(\d{2})\d{6}(\d{2})/g, "$1••••••$2"); }
 
 export default function MatchbookApp() {
   const [authReady, setAuthReady] = useState(!hasSupabase);
@@ -160,6 +159,6 @@ function ProfileForm({ profile, setProfile, title, subtitle, onSave, busy }: { p
 }
 
 function InfoSection({ profile }: { profile: Profile }) {
-  const items = [[Cake, "Date of birth", profile.dateOfBirth], [UserRound, "Gender", profile.gender], [Languages, "Mother tongue & languages", [profile.motherTongue, profile.languages].filter(Boolean).join(" · ")], [BriefcaseBusiness, "Education", profile.education], [BriefcaseBusiness, "Work", profile.job], [UserRound, "Height & weight", [profile.height, profile.weight].filter(Boolean).join(" · ")], [Heart, "Religion & marital status", [profile.religion, profile.maritalStatus].filter(Boolean).join(" · ")], [MapPin, "Originally from", profile.originallyFrom], [Home, "Present residence", profile.residence], [UsersRound, "Family", profile.familyDetails], [Sparkles, "Hobbies", profile.hobbies], [MessageSquare, "Contact", maskPhone(profile.phone)], [Heart, "Partner preference", profile.partnerPreference]] as const;
+  const items = [[Cake, "Date of birth", profile.dateOfBirth], [UserRound, "Gender", profile.gender], [Languages, "Mother tongue & languages", [profile.motherTongue, profile.languages].filter(Boolean).join(" · ")], [BriefcaseBusiness, "Education", profile.education], [BriefcaseBusiness, "Work", profile.job], [UserRound, "Height & weight", [profile.height, profile.weight].filter(Boolean).join(" · ")], [Heart, "Religion & marital status", [profile.religion, profile.maritalStatus].filter(Boolean).join(" · ")], [MapPin, "Originally from", profile.originallyFrom], [Home, "Present residence", profile.residence], [UsersRound, "Family", profile.familyDetails], [Sparkles, "Hobbies", profile.hobbies], [MessageSquare, "Contact", profile.phone], [Heart, "Partner preference", profile.partnerPreference]] as const;
   return <section className="panel info"><div className="section-head"><div><h2>Profile details</h2><p>Saved {new Date(profile.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</p></div></div><div className="info-grid">{items.filter(([, , v]) => v).map(([Icon, label, value]) => <div className="info-item" key={label}><span className="info-icon"><Icon /></span><div><small>{label}</small><p>{value}</p></div></div>)}</div></section>;
 }
