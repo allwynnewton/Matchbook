@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BriefcaseBusiness, Cake, Camera, Check, ChevronRight, Heart, Home, ImagePlus, Languages, MapPin, MessageSquare, MoreVertical, Pencil, Plus, Search, ShieldCheck, Sparkles, Trash2, Upload, UserRound, UsersRound, X } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Cake, Camera, Check, ChevronRight, Heart, Home, ImagePlus, Languages, LogOut, MapPin, MessageSquare, MoreVertical, Pencil, Plus, Search, ShieldCheck, Sparkles, Trash2, Upload, UserRound, UsersRound, X } from "lucide-react";
 import { ageFromDob, parseProfileText } from "@/lib/parser";
 import { profileStore } from "@/lib/profile-store";
 import { emptyProfile, Profile, ProfileStatus } from "@/lib/types";
@@ -96,6 +96,7 @@ export default function MatchbookApp() {
   const removeProfile = async () => { if (!selected || !confirm(`Delete ${selected.name}'s profile and all photos? This cannot be undone.`)) return; setBusy(true); try { await profileStore.remove(selected); setProfiles(p => p.filter(x => x.id !== selected.id)); setSelected(null); setView("profiles"); setNotice("Profile deleted"); } finally { setBusy(false); } };
   const uploadPhotos = async (files: FileList | null) => { if (!selected || !files?.length) return; setBusy(true); try { const photos = await profileStore.upload(selected, Array.from(files)); const next = { ...selected, photos: [...selected.photos, ...photos] }; await profileStore.save(next); setSelected(next); setProfiles(p => p.map(x => x.id === next.id ? next : x)); setNotice(`${photos.length} photo${photos.length > 1 ? "s" : ""} added`); } catch (e) { setNotice(e instanceof Error ? e.message : "Upload failed"); } finally { setBusy(false); } };
   const addComment = async () => { if (!selected || !comment.trim()) return; setBusy(true); try { const c = await profileStore.addComment(selected, comment.trim()); const next = { ...selected, comments: [...selected.comments, c] }; if (profileStore.isDemo) await profileStore.save(next); setSelected(next); setProfiles(p => p.map(x => x.id === next.id ? next : x)); setComment(""); } finally { setBusy(false); } };
+  const signOut = async () => { if (!hasSupabase) return; if (!confirm("Sign out of Matchbook?")) return; setBusy(true); try { await createSupabase()!.auth.signOut(); setProfiles([]); setSelected(null); setView("profiles"); setSignedIn(false); } catch (e) { setNotice(e instanceof Error ? e.message : "Could not sign out"); } finally { setBusy(false); } };
 
   if (!authReady) return <div className="auth-loading"><span /></div>;
   if (!signedIn) return <AuthScreen onSignedIn={() => { setSignedIn(true); load(); }} />;
@@ -108,11 +109,11 @@ export default function MatchbookApp() {
         <button className={view === "add" ? "active" : ""} onClick={beginAdd}><Plus /> Add profile</button>
       </nav>
       <div className="privacy-card"><ShieldCheck /><div><strong>Your private space</strong><p>Profiles and photos are visible only to your account.</p></div></div>
-      <div className="sidebar-foot"><span className="avatar-mini">AH</span><div><strong>Allwyn</strong><small>{profileStore.isDemo ? "Demo workspace" : "Private account"}</small></div><MoreVertical /></div>
+      <div className="sidebar-foot"><span className="avatar-mini">AH</span><div><strong>Allwyn</strong><small>{profileStore.isDemo ? "Demo workspace" : "Private account"}</small></div>{profileStore.isDemo ? <MoreVertical /> : <button className="foot-logout" onClick={signOut} title="Sign out" aria-label="Sign out"><LogOut /></button>}</div>
     </aside>
 
     <main>
-      <header className="mobile-head"><button className="brand" onClick={() => setView("profiles")}><span className="brand-mark"><Heart size={17} fill="currentColor" /></span><span>Matchbook</span></button><button className="icon-button" onClick={beginAdd}><Plus /></button></header>
+      <header className="mobile-head"><button className="brand" onClick={() => setView("profiles")}><span className="brand-mark"><Heart size={17} fill="currentColor" /></span><span>Matchbook</span></button><div className="mobile-head-actions"><button className="icon-button" onClick={beginAdd} aria-label="Add profile"><Plus /></button>{!profileStore.isDemo && <button className="icon-button" onClick={signOut} aria-label="Sign out"><LogOut /></button>}</div></header>
       {profileStore.isDemo && <div className="demo-banner"><Sparkles /> Demo mode is active. Your entries remain on this device until Supabase is connected.</div>}
       {view === "profiles" && <section className="page profiles-page">
         <div className="page-title"><div><p className="eyebrow">YOUR PRIVATE COLLECTION</p><h1>Profiles</h1><p>Keep every promising match organized in one calm place.</p></div><button className="primary" onClick={beginAdd}><Plus /> Add profile</button></div>

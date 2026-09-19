@@ -4,3 +4,10 @@ node_modules
 !.env.example
 *.log
 .vercel
+
+# Next.js generated agent files
+AGENTS.md
+CLAUDE.md
+
+# Local editor/tooling
+.claude/
