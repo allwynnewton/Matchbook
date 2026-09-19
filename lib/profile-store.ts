@@ -67,6 +67,12 @@ export const profileStore = {
     }
     return created;
   },
+  async removePhoto(photo: ProfilePhoto): Promise<void> {
+    if (!hasSupabase) return; // demo: photos live in the profile JSON; caller updates + saves
+    const sb = createSupabase()!; await sb.auth.getUser();
+    if (photo.path) await sb.storage.from("profile-photos").remove([photo.path]);
+    const { error } = await sb.from("profile_photos").delete().eq("id", photo.id); if (error) throw error;
+  },
   async addComment(profile: Profile, body: string): Promise<ProfileComment> {
     const comment = { id: crypto.randomUUID(), body, createdAt: new Date().toISOString() };
     if (hasSupabase) { const sb = createSupabase()!; await sb.auth.getUser(); const { error } = await sb.from("profile_comments").insert({ id: comment.id, profile_id: profile.id, body }); if (error) throw error; }
