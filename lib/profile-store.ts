@@ -55,9 +55,12 @@ export const profileStore = {
   },
   async upload(profile: Profile, files: File[]): Promise<ProfilePhoto[]> {
     if (!hasSupabase) return Promise.all(files.map(file => new Promise<ProfilePhoto>((resolve, reject) => { const reader = new FileReader(); reader.onerror = () => reject(reader.error); reader.onload = () => resolve({ id: crypto.randomUUID(), url: String(reader.result), name: file.name }); reader.readAsDataURL(file); })));
-    const sb = createSupabase()!; await sb.auth.getUser(); const created: ProfilePhoto[] = [];
+    const sb = createSupabase()!;
+    const { data: { user }, error: authError } = await sb.auth.getUser();
+    if (authError || !user) throw new Error("Your session has expired. Please sign in again.");
+    const created: ProfilePhoto[] = [];
     for (const file of files) {
-      const id = crypto.randomUUID(); const path = `${profile.id}/${id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+      const id = crypto.randomUUID(); const path = `${user.id}/${profile.id}/${id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
       const { error: uploadError } = await sb.storage.from("profile-photos").upload(path, file); if (uploadError) throw uploadError;
       const { error: rowError } = await sb.from("profile_photos").insert({ id, profile_id: profile.id, storage_path: path, file_name: file.name }); if (rowError) throw rowError;
       const { data } = await sb.storage.from("profile-photos").createSignedUrl(path, 3600); created.push({ id, path, url: data?.signedUrl || "", name: file.name });

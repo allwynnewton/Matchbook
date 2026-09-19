@@ -1,55 +1,124 @@
--- Fix for: "new row violates row-level security policy" (saving profiles OR photos).
--- Recreates every RLS policy the app needs — the three tables AND storage — without
--- recreating the tables, so it is safe to run on an existing database any number of
--- times. Paste this whole file into Supabase -> SQL Editor -> Run.
+-- =========================================================
+-- MATCHBOOK STORAGE RLS FIX
+-- Keeps RLS enabled and supports the current upload path:
+-- profile-id/photo-name.jpg
+-- =========================================================
 
--- 1. Make sure RLS is enabled on the tables.
-alter table public.profiles enable row level security;
-alter table public.profile_photos enable row level security;
-alter table public.profile_comments enable row level security;
+-- 1. Create a secure helper function.
+-- SECURITY DEFINER allows Storage policies to verify profile ownership
+-- without being blocked by the profiles table's own RLS policy.
 
--- 2. Table policies (owner-only access).
-drop policy if exists "owners manage profiles" on public.profiles;
-drop policy if exists "owners manage photos" on public.profile_photos;
-drop policy if exists "owners manage comments" on public.profile_comments;
+create or replace function public.user_owns_profile(target_profile_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = target_profile_id
+      and user_id = auth.uid()
+  );
+$$;
 
-create policy "owners manage profiles" on public.profiles for all
-  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+revoke all on function public.user_owns_profile(uuid) from public;
+grant execute on function public.user_owns_profile(uuid) to authenticated;
 
-create policy "owners manage photos" on public.profile_photos for all
-  using (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid()))
-  with check (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid()));
 
-create policy "owners manage comments" on public.profile_comments for all
-  using (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid()))
-  with check (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid()));
+-- 2. Keep RLS enabled.
 
--- 3. Make sure the private bucket exists.
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('profile-photos', 'profile-photos', false, 10485760, array['image/jpeg','image/png','image/webp','image/heic'])
-on conflict (id) do nothing;
+alter table storage.objects enable row level security;
 
--- 4. Storage policies. The folder (first path segment) is the profile id, so a user
---    may only touch photos of profiles they own.
-drop policy if exists "owners upload profile photos" on storage.objects;
-drop policy if exists "owners read profile photos" on storage.objects;
-drop policy if exists "owners delete profile photos" on storage.objects;
 
-create policy "owners upload profile photos" on storage.objects for insert to authenticated
-  with check (bucket_id = 'profile-photos' and exists (
-    select 1 from public.profiles p where p.id::text = (storage.foldername(name))[1] and p.user_id = auth.uid()));
+-- 3. Remove the existing Matchbook storage policies.
 
-create policy "owners read profile photos" on storage.objects for select to authenticated
-  using (bucket_id = 'profile-photos' and exists (
-    select 1 from public.profiles p where p.id::text = (storage.foldername(name))[1] and p.user_id = auth.uid()));
+drop policy if exists "owners upload profile photos"
+on storage.objects;
 
-create policy "owners delete profile photos" on storage.objects for delete to authenticated
-  using (bucket_id = 'profile-photos' and exists (
-    select 1 from public.profiles p where p.id::text = (storage.foldername(name))[1] and p.user_id = auth.uid()));
+drop policy if exists "owners read profile photos"
+on storage.objects;
 
--- 5. Verify — should return 6 rows: 3 on public tables + 3 on storage.objects.
-select schemaname, tablename, policyname, cmd
+drop policy if exists "owners delete profile photos"
+on storage.objects;
+
+drop policy if exists "owners update profile photos"
+on storage.objects;
+
+
+-- 4. Allow authenticated owners to upload photos.
+
+create policy "owners upload profile photos"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'profile-photos'
+  and public.user_owns_profile(
+    ((storage.foldername(name))[1])::uuid
+  )
+);
+
+
+-- 5. Allow owners to view and create signed URLs.
+
+create policy "owners read profile photos"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'profile-photos'
+  and public.user_owns_profile(
+    ((storage.foldername(name))[1])::uuid
+  )
+);
+
+
+-- 6. Allow owners to delete photos.
+
+create policy "owners delete profile photos"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'profile-photos'
+  and public.user_owns_profile(
+    ((storage.foldername(name))[1])::uuid
+  )
+);
+
+
+-- 7. Allow owners to update/replace photos if required.
+
+create policy "owners update profile photos"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'profile-photos'
+  and public.user_owns_profile(
+    ((storage.foldername(name))[1])::uuid
+  )
+)
+with check (
+  bucket_id = 'profile-photos'
+  and public.user_owns_profile(
+    ((storage.foldername(name))[1])::uuid
+  )
+);
+
+
+-- 8. Verify the policies.
+
+select
+  schemaname,
+  tablename,
+  policyname,
+  cmd,
+  roles
 from pg_policies
-where (schemaname = 'public' and tablename in ('profiles','profile_photos','profile_comments'))
-   or (schemaname = 'storage' and tablename = 'objects' and policyname like 'owners %profile photos')
-order by schemaname, tablename, policyname;
+where schemaname = 'storage'
+  and tablename = 'objects'
+  and policyname like 'owners %profile photos'
+order by policyname;
