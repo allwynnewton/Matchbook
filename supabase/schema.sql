@@ -25,6 +25,10 @@ alter table public.profiles enable row level security;
 alter table public.profile_photos enable row level security;
 alter table public.profile_comments enable row level security;
 
+drop policy if exists "owners manage profiles" on public.profiles;
+drop policy if exists "owners manage photos" on public.profile_photos;
+drop policy if exists "owners manage comments" on public.profile_comments;
+
 create policy "owners manage profiles" on public.profiles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "owners manage photos" on public.profile_photos for all using (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid())) with check (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid()));
 create policy "owners manage comments" on public.profile_comments for all using (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid())) with check (exists (select 1 from public.profiles p where p.id = profile_id and p.user_id = auth.uid()));
@@ -32,6 +36,10 @@ create policy "owners manage comments" on public.profile_comments for all using 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('profile-photos', 'profile-photos', false, 10485760, array['image/jpeg','image/png','image/webp','image/heic'])
 on conflict (id) do nothing;
+
+drop policy if exists "owners upload profile photos" on storage.objects;
+drop policy if exists "owners read profile photos" on storage.objects;
+drop policy if exists "owners delete profile photos" on storage.objects;
 
 create policy "owners upload profile photos" on storage.objects for insert to authenticated with check (bucket_id = 'profile-photos' and exists (select 1 from public.profiles p where p.id::text = (storage.foldername(name))[1] and p.user_id = auth.uid()));
 create policy "owners read profile photos" on storage.objects for select to authenticated using (bucket_id = 'profile-photos' and exists (select 1 from public.profiles p where p.id::text = (storage.foldername(name))[1] and p.user_id = auth.uid()));
