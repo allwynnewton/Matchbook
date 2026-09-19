@@ -48,14 +48,14 @@ export const profileStore = {
   },
   async remove(profile: Profile): Promise<void> {
     if (!hasSupabase) { localWrite(localRead().filter(p => p.id !== profile.id)); return; }
-    const sb = createSupabase()!;
+    const sb = createSupabase()!; await sb.auth.getUser();
     const paths = profile.photos.map(p => p.path).filter(Boolean) as string[];
     if (paths.length) await sb.storage.from("profile-photos").remove(paths);
     const { error } = await sb.from("profiles").delete().eq("id", profile.id); if (error) throw error;
   },
   async upload(profile: Profile, files: File[]): Promise<ProfilePhoto[]> {
     if (!hasSupabase) return Promise.all(files.map(file => new Promise<ProfilePhoto>((resolve, reject) => { const reader = new FileReader(); reader.onerror = () => reject(reader.error); reader.onload = () => resolve({ id: crypto.randomUUID(), url: String(reader.result), name: file.name }); reader.readAsDataURL(file); })));
-    const sb = createSupabase()!; const created: ProfilePhoto[] = [];
+    const sb = createSupabase()!; await sb.auth.getUser(); const created: ProfilePhoto[] = [];
     for (const file of files) {
       const id = crypto.randomUUID(); const path = `${profile.id}/${id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
       const { error: uploadError } = await sb.storage.from("profile-photos").upload(path, file); if (uploadError) throw uploadError;
@@ -66,7 +66,7 @@ export const profileStore = {
   },
   async addComment(profile: Profile, body: string): Promise<ProfileComment> {
     const comment = { id: crypto.randomUUID(), body, createdAt: new Date().toISOString() };
-    if (hasSupabase) { const sb = createSupabase()!; const { error } = await sb.from("profile_comments").insert({ id: comment.id, profile_id: profile.id, body }); if (error) throw error; }
+    if (hasSupabase) { const sb = createSupabase()!; await sb.auth.getUser(); const { error } = await sb.from("profile_comments").insert({ id: comment.id, profile_id: profile.id, body }); if (error) throw error; }
     return comment;
   }
 };
